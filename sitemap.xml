@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://klarversum.at/</loc>
+    <lastmod>2026-11-25</lastmod>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klarversum.at/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klarversum.at/en.html"/>
+  </url>
+  <url>
+    <loc>https://klarversum.at/en.html</loc>
+    <lastmod>2026-11-25</lastmod>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klarversum.at/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klarversum.at/en.html"/>
+  </url>
+</urlset>
