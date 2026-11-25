@@ -79,6 +79,7 @@ mark.ph { background: #fff1a8; color: inherit; padding: 0 .12em; }
 .logo { --fs: 21px; font-size: var(--fs); display: inline-flex; align-items: baseline; }
 /* NACHHILFE und Trennstrich sitzen auf der Mitte der Kleinbuchstaben (x-Höhe) von „Klarversum“ */
 .logo-tag { position: relative; top: calc(2.8px - .273 * var(--fs)); font-family: var(--sans); font-size: 10.5px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; color: var(--muted); margin-left: 14px; padding-left: 15px; line-height: 1; }
+.logo-mark { width: 1.3em; height: 1.3em; flex-shrink: 0; align-self: baseline; position: relative; top: .286em; margin-right: .42em; }
 .logo-tag::before { content: ""; position: absolute; left: 0; top: 50%; height: 16px; margin-top: -8px; width: 1px; background: var(--line); }
 .nav { display: flex; align-items: center; gap: 36px; }
 .nav a:not(.btn) { text-decoration: none; font-size: 11px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: var(--muted); transition: color .2s; }
