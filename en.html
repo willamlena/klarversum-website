@@ -211,7 +211,7 @@
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=43">
+<link rel="stylesheet" href="style.css?v=44">
 <script defer src="https://cloud.umami.is/script.js" data-website-id="71b133f1-44a5-4e5a-97ea-cd241fa193fd"></script>
 </head>
 <body>
@@ -675,9 +675,16 @@
         <label>Name *
           <input type="text" name="name" required autocomplete="name">
         </label>
-        <label>Email *
-          <input type="email" name="email" required autocomplete="email">
-        </label>
+        <div class="row">
+          <label>Email *
+            <input type="email" name="email" required autocomplete="email" inputmode="email">
+            <span class="field-msg" id="email-msg" aria-live="polite"></span>
+          </label>
+          <label>Phone / WhatsApp *
+            <input type="tel" name="telefon" required autocomplete="tel" inputmode="tel" placeholder="+43 660 1234567">
+            <span class="field-msg" id="tel-msg" aria-live="polite"></span>
+          </label>
+        </div>
         <div class="row">
           <label>Subject *
             <select name="fach" required>
@@ -759,11 +766,86 @@
   const FORM_KEY = '039d34dc-af20-40a5-b442-c0023825596a'; // Web3Forms
   const form = document.getElementById('contact-form');
   const status = document.getElementById('form-status');
+
+  // --- Prüfung von E-Mail und Telefon (Senden erst möglich, wenn beides passt) ---
+  const T = {bad_email: 'Please check your email address.', meant: 'Did you mean', keep: 'No, it’s correct', nodomain: 'This email domain doesn’t seem to receive emails. Please check the address.', bad_tel: 'Please enter a valid phone number with country code, e.g. +43 660 1234567.', need_cc: 'Please add your country code. Tap your country:'};
+  const emailIn = form.querySelector('[name=email]'), telIn = form.querySelector('[name=telefon]');
+  const emailMsg = document.getElementById('email-msg'), telMsg = document.getElementById('tel-msg');
+  const sendBtn = form.querySelector('button[type=submit]');
+  const KNOWN = ['gmail.com','googlemail.com','gmx.at','gmx.de','gmx.net','gmx.ch','web.de','hotmail.com','hotmail.de','outlook.com','outlook.de','live.com','live.at','icloud.com','me.com','yahoo.com','yahoo.de','aon.at','a1.net','chello.at','t-online.de','freenet.de','bluewin.ch','protonmail.com','proton.me','klarversum.at'];
+  const EMAIL_RE = /^[A-Za-z0-9._%+'-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/;
+  const domainCache = {}, kept = new Set();
+  let emailOk = false, telOk = false;
+  const lev = (a, b) => { const m = [...Array(b.length + 1).keys()]; for (let i = 1; i <= a.length; i++) { let p = m[0]; m[0] = i; for (let j = 1; j <= b.length; j++) { const t = m[j]; m[j] = Math.min(m[j] + 1, m[j - 1] + 1, p + (a[i - 1] === b[j - 1] ? 0 : 1)); p = t; } } return m[b.length]; };
+  function suggest(domain) {
+    if (KNOWN.includes(domain)) return null;
+    const fixed = domain.replace(/\.(con|cmo|ocm|comm|om)$/, '.com').replace(/\.(ta|att)$/, '.at').replace(/\.(ed|dee)$/, '.de');
+    if (fixed !== domain) return fixed;
+    let best = null, bd = 9;
+    for (const k of KNOWN) { const d = lev(domain, k); if (d < bd) { bd = d; best = k; } }
+    return bd > 0 && bd <= (domain.length > 8 ? 2 : 1) ? best : null;
+  }
+  async function domainReceivesMail(domain) {
+    if (KNOWN.includes(domain)) return true;
+    if (domain in domainCache) return domainCache[domain];
+    try {
+      const ctrl = new AbortController(); setTimeout(() => ctrl.abort(), 3500);
+      const q = t => fetch('https://cloudflare-dns.com/dns-query?name=' + encodeURIComponent(domain) + '&type=' + t, { headers: { accept: 'application/dns-json' }, signal: ctrl.signal }).then(r => r.json());
+      const mx = await q('MX');
+      if (mx.Status === 3) return (domainCache[domain] = false);
+      if ((mx.Answer || []).some(a => a.type === 15)) return (domainCache[domain] = true);
+      const a = await q('A');
+      return (domainCache[domain] = (a.Answer || []).some(x => x.type === 1));
+    } catch { return true; } // Prüfung nicht möglich (offline, Zeitüberschreitung): nicht blockieren
+  }
+  function showMsg(el, input, html) { el.innerHTML = html || ''; input.classList.toggle('invalid', !!html); input.setAttribute('aria-invalid', html ? 'true' : 'false'); }
+  async function checkEmail(show) {
+    const v = emailIn.value.trim(); emailOk = false;
+    if (!EMAIL_RE.test(v)) { if (show && v) showMsg(emailMsg, emailIn, T.bad_email); else if (!v) showMsg(emailMsg, emailIn, ''); return update(); }
+    const [local, domain] = [v.slice(0, v.lastIndexOf('@')), v.slice(v.lastIndexOf('@') + 1).toLowerCase()];
+    const s = kept.has(domain) ? null : suggest(domain);
+    if (s) { showMsg(emailMsg, emailIn, T.meant + ' <button type="button" data-fix="' + local + '@' + s + '">' + local + '@' + s + '</button>? · <button type="button" data-keep="' + domain + '">' + T.keep + '</button>'); }
+    else showMsg(emailMsg, emailIn, '');
+    const ok = await domainReceivesMail(domain);
+    if (emailIn.value.trim() !== v) return; // inzwischen geändert: Ergebnis gehört zu einer alten Eingabe
+    if (!ok) { showMsg(emailMsg, emailIn, T.nodomain); return update(); }
+    emailOk = !s; // bei Verdacht auf Tippfehler erst korrigieren oder bestätigen
+    update();
+  }
+  function checkTel(show) {
+    const v = telIn.value.trim(), digits = v.replace(/[\s\/().-]/g, '');
+    telOk = /^(\+|00)[1-9]\d{6,14}$/.test(digits); // Ländervorwahl ist Pflicht
+    let msg = '';
+    if (!telOk && show && v) {
+      if (/^0[1-9]\d{5,}$/.test(digits)) { // nationale Nummer ohne Vorwahl, z. B. 0660 …
+        const rest = v.replace(/^\s*0/, '');
+        msg = T.need_cc + ' ' + [['+43', 'AT'], ['+49', 'DE'], ['+41', 'CH']].map(([cc, n]) => '<button type="button" data-tel="' + cc + ' ' + rest + '">' + n + ' ' + cc + '</button>').join(' · ');
+      } else msg = T.bad_tel;
+    }
+    showMsg(telMsg, telIn, msg);
+    update();
+  }
+  function update() { sendBtn.disabled = !(emailOk && telOk && form.checkValidity()); }
+  let tm;
+  emailIn.addEventListener('input', () => { clearTimeout(tm); emailOk = false; update(); tm = setTimeout(() => checkEmail(emailMsg.innerHTML !== ''), 500); });
+  emailIn.addEventListener('blur', () => checkEmail(true));
+  telIn.addEventListener('input', () => checkTel(telMsg.innerHTML !== ''));
+  telIn.addEventListener('blur', () => checkTel(true));
+  telMsg.addEventListener('click', e => { const b = e.target.closest('[data-tel]'); if (!b) return; e.preventDefault(); telIn.value = b.dataset.tel; checkTel(true); });
+  form.addEventListener('input', update); form.addEventListener('change', update);
+  emailMsg.addEventListener('click', e => {
+    const b = e.target.closest('[data-fix],[data-keep]'); if (!b) return; e.preventDefault();
+    if (b.dataset.fix) emailIn.value = b.dataset.fix; else kept.add(b.dataset.keep);
+    checkEmail(true);
+  });
+  update();
   form.addEventListener('submit', async e => {
     e.preventDefault();
     const f = new FormData(form);
     if (f.get('botcheck')) return;
-    const text = `Name: ${f.get('name')}\nEmail: ${f.get('email')}\nSubject: ${f.get('fach')}\nSchool level: ${f.get('stufe')}\n\n${f.get('nachricht')}`;
+    await checkEmail(true); checkTel(true);
+    if (!emailOk || !telOk) { (emailOk ? telIn : emailIn).focus(); return; }
+    const text = `Name: ${f.get('name')}\nEmail: ${f.get('email')}\nPhone: ${f.get('telefon')}\nSubject: ${f.get('fach')}\nSchool level: ${f.get('stufe')}\n\n${f.get('nachricht')}`;
     if (!FORM_KEY) {
       location.href = 'mailto:klarversum@gmail.com?subject=' + encodeURIComponent('Tutoring enquiry') + '&body=' + encodeURIComponent(text);
       return;
@@ -780,18 +862,18 @@
           subject: 'Nachhilfe-Anfrage (Englisch) von ' + f.get('name'),
           from_name: 'Klarversum Website (EN)',
           replyto: f.get('email'),
-          name: f.get('name'), email: f.get('email'), fach: f.get('fach'),
+          name: f.get('name'), email: f.get('email'), telefon: f.get('telefon'), fach: f.get('fach'),
           schulstufe: f.get('stufe'), nachricht: f.get('nachricht'), sprache: 'Englisch'
         })
       });
       const data = await res.json();
       if (!data.success) throw new Error();
-      form.reset();
+      form.reset(); emailOk = telOk = false; showMsg(emailMsg, emailIn, ''); showMsg(telMsg, telIn, '');
       status.textContent = 'Thank you! Your enquiry has arrived – I’ll get back to you within 24 hours.';
     } catch {
       status.textContent = 'Sorry, that didn’t work. Please email me directly at klarversum@gmail.com.';
     } finally {
-      btn.disabled = false;
+      update();
     }
   });
 
